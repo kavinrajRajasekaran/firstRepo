@@ -13,10 +13,6 @@ exports.signupWorkflow = signupWorkflow;
 exports.updateWorkflow = updateWorkflow;
 exports.deleteUserInfoWorkflow = deleteUserInfoWorkflow;
 const workflow_1 = require("@temporalio/workflow");
-// const activityOptions = {
-//   startToCloseTimeout: '5 minutes',
-// };
-// Access activities via proxy
 const { userCreationAuth0, updateUserInAuth0, deleteUserInAuth0, deleteIndb } = (0, workflow_1.proxyActivities)({
     retry: {
         maximumAttempts: 5,

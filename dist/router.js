@@ -50,7 +50,7 @@ router.post("/signup", (req, res) => __awaiter(void 0, void 0, void 0, function*
         workflowId: `signup-${user._id}`,
         args: [user.name, user.email, user.password, user._id],
     });
-    res.status(200).json({ "token": (0, jwtToken_1.generateToken)(user._id) });
+    res.status(200).json({ "token": (0, jwtToken_1.generateToken)(user._id), user });
 }));
 router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const { email, name, password } = req.body;
@@ -70,7 +70,7 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             return;
         }
         else {
-            res.status(200).json({ "token": (0, jwtToken_1.generateToken)(user._id) });
+            res.status(200).json({ "token": (0, jwtToken_1.generateToken)(user._id), user });
         }
     }
     catch (err) {

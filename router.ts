@@ -41,7 +41,7 @@ router.post("/signup", async (req: Request, res: Response) => {
         workflowId: `signup-${user._id}`,
         args: [user.name, user.email, user.password, user._id],
     })
-    res.status(200).json({ "token": generateToken(user._id) })
+    res.status(200).json({ "token": generateToken(user._id),user })
 
 
 
@@ -68,7 +68,7 @@ router.post('/login', async (req: Request, res: Response) => {
             return
         }
         else {
-            res.status(200).json({ "token": generateToken(user._id) })
+            res.status(200).json({ "token": generateToken(user._id) ,user})
         }
     }
     catch (err: any) {
