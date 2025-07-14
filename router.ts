@@ -1,208 +1,153 @@
-import { Router, Request, Response } from "express";
-import { IUser, IUserDocument, UserModel } from "./userModel";
+import { OrgModel, IOrg,Iupdate } from './utils/OrgModel'
+import { Router, Request, Response } from 'express'
+import { createOrgWorkflow, deleteWorkflow, updateWorkflow } from './temporal/workflows'
+import { getClient } from './utils/client'
+import { getAll } from './utils/client'
 const router = Router()
-import { getClient } from "./client";
-import { signupWorkflow, updateWorkflow, deleteUserInfoWorkflow } from "./workflows";
-import { verifyToken, generateToken } from "./jwtToken";
-import mongoose from "mongoose"
-import axios from 'axios'
-import { getToken } from "./auth0TokenGenerator";
-router.post("/signup", async (req: Request, res: Response) => {
-    const { email, name, password } = req.body
-
-    if (!email || !name || !password) {
-        res.status(400).json({
-            "error": "invalid fields"
-        })
-    }
-
-    try {
-        let user = await UserModel.findOne({ email })
-        if (user) {
-            res.status(409).json("User already exists")
-            return
-        }
-    }
-    catch (err: any) {
-        res.status(500).send({ "error": err.message })
-        return
-    }
-
-    let user: IUserDocument = await UserModel.create({
-        name: name,
-        email,
-        password
-    })
-
-    let temporalClient = await getClient()
-
-    await temporalClient.workflow.start(signupWorkflow, {
-        taskQueue: 'user-management',
-        workflowId: `signup-${user._id}`,
-        args: [user.name, user.email, user.password, user._id],
-    })
-    res.status(200).json({ "token": generateToken(user._id),user })
+import mongoose from 'mongoose'
 
 
+router.get("/allOrgs",async (req:Request,res:Response)=>{
+    try{
+       
+        const result=await getAll()
+         
 
-})
+ 
+    res.status(200).send(result)
+         }
+    
+    catch(err:any){
+        console.log(err?.message)
+        res.status(500).send("Internal server error ")
 
-
-router.post('/login', async (req: Request, res: Response) => {
-    const { email, name, password } = req.body
-
-    if (!email || !name || !password) {
-        res.status(400).json({
-            "error": "invalid fields"
-        })
-    }
-
-    try {
-        let user = await UserModel.findOne({ email })
-        if (!user) {
-            res.status(404).json("User notexists")
-            return
-        }
-        if (user && user.password !== password) {
-            res.status(401).json("Unauthorized access")
-            return
-        }
-        else {
-            res.status(200).json({ "token": generateToken(user._id) ,user})
-        }
-    }
-    catch (err: any) {
-        res.status(500).send({ "error": err.message })
-        return
     }
 })
 
 
 
-router.patch("/update", async (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(400).send("InvalidToken");
+
+router.post('/create', async (req: Request, res: Response) => {
+    const { name, display_name, branding_logo_url, createdByEmail, primary_color, page_background_color } = req.body
+    if (!name || !display_name || !branding_logo_url || !createdByEmail || !primary_color || !page_background_color) {
+        res.status(400).json('insufficient data to create an organization')
+
     }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-        return res.status(400).send("InvalidToken");
-    }
-
-    const { username, password } = req.body;
-
-    if (!username && !password) {
-        return res.status(400).send("No fields to update");
-    }
-
     try {
-        const userId = new mongoose.Types.ObjectId(decoded.userId);
+        let organization: IOrg = await OrgModel.create({
 
-        const updateFields: Record<string, any> = {};
-        if (username) updateFields.name =username;
-        if (password) updateFields.password = password;
 
-        const user = await UserModel.findByIdAndUpdate(userId, updateFields, {
-            new: true,
-        });
+            "name": name,
+            "display_name": display_name,
+            "branding": {
+                "logo_url": branding_logo_url
+            },
+            "metadata": {
+                createdByEmail: createdByEmail,
+                 status:"provisoning"
+            },
+            "colors": {
+                "page_background": page_background_color,
+                "primary": primary_color
+            },
+           
 
-        if (!user) {
-            return res.status(404).send("User not found");
-        }
 
-        if (!user.authId) {
-            return res.status(500).send("authId is missing for this user.");
-        }
+        })
+        let client = await getClient()
 
-        const client = await getClient();
+        let createdOrg = await client.workflow.start(createOrgWorkflow, {
+            args: [organization,organization._id!],
+            workflowId: organization.name + Date.now(),
+            taskQueue: 'organizationManagement'
 
-        await client.workflow.start(updateWorkflow, {
-            args: [user.authId, user._id, username, password],
-            taskQueue: 'user-management',
-            workflowId: `update-${Date.now()}`,
-        });
+        })
+        res.status(200).send("workflow started")
 
-        return res.status(200).json({ message: "User update initiated", user });
-    } catch (error) {
-        console.error('Update error:', error);
-        return res.status(500).send("Server error");
     }
-});
-
-
-
-router.patch("/delete", async (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(400).send("InvalidToken");
+    catch (err:any) {
+          console.error("Error message:", err?.message);
+  console.error("Stack trace:", err?.stack);
+  console.error("Full error object:", err);
+        console.log(err)
+        throw new Error("error while creating the organization ")
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = verifyToken(token);
-
-    if (!decoded) {
-        return res.status(400).send("InvalidToken");
-    }
-
-    const { username, password } = req.body;
-
-    if (!username && !password) {
-        return res.status(400).send("No fields to update");
-    }
-
-    try {
-        const userId = new mongoose.Types.ObjectId(decoded.userId);
-
-        const user = await UserModel.findByIdAndUpdate(userId, { status: "deleting" }, {
-            new: true,
-        });
-
-        if (!user) {
-            return res.status(404).send("User not found");
-        }
-
-        if (!user.authId) {
-            return res.status(500).send("authId is missing for this user.");
-        }
-
-        const client = await getClient();
-
-        await client.workflow.start(deleteUserInfoWorkflow, {
-            args: [user.authId, user._id],
-            taskQueue: 'user-management',
-            workflowId: `update-${Date.now()}`,
-        });
-
-        return res.status(200).json({ message: "User deletion  initiated", user });
-    } catch (error) {
-        console.error('Update error:', error);
-        return res.status(500).send("Server error");
-    }
-});
+})
 
 
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const token = await getToken();
-    const response = await axios.get('https://kavinraj.us.auth0.com/api/v2/users', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+router.patch("/update/:id",async(req:Request,res:Response)=>{
+const { id } = req.params;
+if (!id) {
+  return res.status(400).send("Invalid userId");
+}
 
-    res.status(200).json(response.data);
-  } catch (error: any) {
-    console.error(' Error fetching users from Auth0:', error.response?.data || error.message);
+const { name, display_name} = req.body;
 
-    res.status(error.response?.status || 500).json({
-      message: 'Failed to fetch users from Auth0',
-      details: error.response?.data || error.message,
-    });
+try {
+  let update: Iupdate = {};
+
+  if (name) update.name = name;  
+  if(display_name) update.display_name=display_name 
+ 
+    
+ 
+
+  const updated = await OrgModel.findByIdAndUpdate(new mongoose.Types.ObjectId(id), update, { new: true });
+  await OrgModel.findByIdAndUpdate(new mongoose.Types.ObjectId(id),{
+    "metadata.status":'updating'
+  })
+  if (!updated) {
+    return res.status(404).send("Organization not found");
   }
-});
 
+  const client = await getClient();
+  console.log(updated.authid, update, updated.metadata.createdByEmail, updated._id)
+  await client.workflow.start(updateWorkflow, {
+    args: [updated.authid, update, updated.metadata.createdByEmail, updated._id],
+    workflowId: updated.name + '-' + Date.now(),
+    taskQueue: 'organizationManagement',
+  });
+
+  res.status(200).send(updated);
+} catch (err: any) {
+  res.status(500).send(err?.message);
+}
+
+})
+
+router.patch('/delete/:id',async(req:Request,res:Response)=>{
+const{id}=req.params
+if(!id){
+    res.status(400).send('error while deleting the user')
+    return
+}
+try{
+const org=await OrgModel.findByIdAndUpdate(new mongoose.Types.ObjectId(id),{
+    "metadata.status":"deleting"
+})
+
+const client=await getClient()
+await client.workflow.start(deleteWorkflow,{
+    args: [org!.authid, org!.metadata.createdByEmail, org!._id],
+    workflowId:"deleting workflow"+Date.now(),
+    taskQueue:'organizationManagement'
+})
+res.status(200).send("delete workflow started")
+}
+catch(err:any){
+    throw new Error(err?.message)
+}
+
+
+})
 
 export default router
+
+
+
+
+
+
+
+

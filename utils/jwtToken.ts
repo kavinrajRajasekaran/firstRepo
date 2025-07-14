@@ -1,4 +1,3 @@
-
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose'
 // Make sure this is set in your .env or replace with a constant in dev

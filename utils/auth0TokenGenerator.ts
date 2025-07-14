@@ -10,15 +10,16 @@ export async function getToken(): Promise<string|null|undefined> {
   }
 
 
+ 
   try {
-      const response = await fetch(process.env.AUTH0_TOKEN_URL!, {
+      const response = await fetch('https://dev-z5htpfd1ttgn2n0d.us.auth0.com/oauth/token', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-         "client_id":process.env.AUTH0_CLIENT_ID,
-        "client_secret":process.env.AUTH0_CLIENT_SECRET,
-        "audience":process.env.AUTH0_AUDIENCE,
-        "grant_type":process.env.GRANT_TYPE
+          "client_id":"dpNlNcUhHplzzCdQsMHopXpRj61v8odJ",
+          "client_secret":"ZIVZ8MszY8AyhwQy6XyXusG8H-3cu3t3ZR0QVHYgtOrq8dFpbM5VV6NLEnDf0i9c",
+          "audience":"https://dev-z5htpfd1ttgn2n0d.us.auth0.com/api/v2/",
+          "grant_type":"client_credentials"
         }),
       });
 
@@ -27,13 +28,11 @@ export async function getToken(): Promise<string|null|undefined> {
       }
 
       const data = await response.json();
-      cachedToken = data.access_token;
-  tokenExpiry = now +data.expires_in * 1000; 
-
-  return cachedToken;
+      return data.access_token
   } catch (error) {
       console.error('Error fetching token:', error);
   }
+
 
  
 }

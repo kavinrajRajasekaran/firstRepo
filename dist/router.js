@@ -12,170 +12,112 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const OrgModel_1 = require("./utils/OrgModel");
 const express_1 = require("express");
-const userModel_1 = require("./userModel");
+const workflows_1 = require("./temporal/workflows");
+const client_1 = require("./utils/client");
+const client_2 = require("./utils/client");
 const router = (0, express_1.Router)();
-const client_1 = require("./client");
-const workflows_1 = require("./workflows");
-const jwtToken_1 = require("./jwtToken");
 const mongoose_1 = __importDefault(require("mongoose"));
-const axios_1 = __importDefault(require("axios"));
-const auth0TokenGenerator_1 = require("./auth0TokenGenerator");
-router.post("/signup", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { email, name, password } = req.body;
-    if (!email || !name || !password) {
-        res.status(400).json({
-            "error": "invalid fields"
-        });
-    }
+router.get("/allOrgs", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        let user = yield userModel_1.UserModel.findOne({ email });
-        if (user) {
-            res.status(409).json("User already exists");
-            return;
-        }
+        const result = yield (0, client_2.getAll)();
+        res.status(200).send(result);
     }
     catch (err) {
-        res.status(500).send({ "error": err.message });
-        return;
-    }
-    let user = yield userModel_1.UserModel.create({
-        name: name,
-        email,
-        password
-    });
-    let temporalClient = yield (0, client_1.getClient)();
-    yield temporalClient.workflow.start(workflows_1.signupWorkflow, {
-        taskQueue: 'user-management',
-        workflowId: `signup-${user._id}`,
-        args: [user.name, user.email, user.password, user._id],
-    });
-    res.status(200).json({ "token": (0, jwtToken_1.generateToken)(user._id), user });
-}));
-router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const { email, name, password } = req.body;
-    if (!email || !name || !password) {
-        res.status(400).json({
-            "error": "invalid fields"
-        });
-    }
-    try {
-        let user = yield userModel_1.UserModel.findOne({ email });
-        if (!user) {
-            res.status(404).json("User notexists");
-            return;
-        }
-        if (user && user.password !== password) {
-            res.status(401).json("Unauthorized access");
-            return;
-        }
-        else {
-            res.status(200).json({ "token": (0, jwtToken_1.generateToken)(user._id), user });
-        }
-    }
-    catch (err) {
-        res.status(500).send({ "error": err.message });
-        return;
+        console.log(err === null || err === void 0 ? void 0 : err.message);
+        res.status(500).send("Internal server error ");
     }
 }));
-router.patch("/update", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(400).send("InvalidToken");
-    }
-    const token = authHeader.split(' ')[1];
-    const decoded = (0, jwtToken_1.verifyToken)(token);
-    if (!decoded) {
-        return res.status(400).send("InvalidToken");
-    }
-    const { username, password } = req.body;
-    if (!username && !password) {
-        return res.status(400).send("No fields to update");
+router.post('/create', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { name, display_name, branding_logo_url, createdByEmail, primary_color, page_background_color } = req.body;
+    if (!name || !display_name || !branding_logo_url || !createdByEmail || !primary_color || !page_background_color) {
+        res.status(400).json('insufficient data to create an organization');
     }
     try {
-        const userId = new mongoose_1.default.Types.ObjectId(decoded.userId);
-        const updateFields = {};
-        if (username)
-            updateFields.name = username;
-        if (password)
-            updateFields.password = password;
-        const user = yield userModel_1.UserModel.findByIdAndUpdate(userId, updateFields, {
-            new: true,
-        });
-        if (!user) {
-            return res.status(404).send("User not found");
-        }
-        if (!user.authId) {
-            return res.status(500).send("authId is missing for this user.");
-        }
-        const client = yield (0, client_1.getClient)();
-        yield client.workflow.start(workflows_1.updateWorkflow, {
-            args: [user.authId, user._id, username, password],
-            taskQueue: 'user-management',
-            workflowId: `update-${Date.now()}`,
-        });
-        return res.status(200).json({ message: "User update initiated", user });
-    }
-    catch (error) {
-        console.error('Update error:', error);
-        return res.status(500).send("Server error");
-    }
-}));
-router.patch("/delete", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(400).send("InvalidToken");
-    }
-    const token = authHeader.split(' ')[1];
-    const decoded = (0, jwtToken_1.verifyToken)(token);
-    if (!decoded) {
-        return res.status(400).send("InvalidToken");
-    }
-    const { username, password } = req.body;
-    if (!username && !password) {
-        return res.status(400).send("No fields to update");
-    }
-    try {
-        const userId = new mongoose_1.default.Types.ObjectId(decoded.userId);
-        const user = yield userModel_1.UserModel.findByIdAndUpdate(userId, { status: "deleting" }, {
-            new: true,
-        });
-        if (!user) {
-            return res.status(404).send("User not found");
-        }
-        if (!user.authId) {
-            return res.status(500).send("authId is missing for this user.");
-        }
-        const client = yield (0, client_1.getClient)();
-        yield client.workflow.start(workflows_1.deleteUserInfoWorkflow, {
-            args: [user.authId, user._id],
-            taskQueue: 'user-management',
-            workflowId: `update-${Date.now()}`,
-        });
-        return res.status(200).json({ message: "User deletion  initiated", user });
-    }
-    catch (error) {
-        console.error('Update error:', error);
-        return res.status(500).send("Server error");
-    }
-}));
-router.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
-    try {
-        const token = yield (0, auth0TokenGenerator_1.getToken)();
-        const response = yield axios_1.default.get('https://kavinraj.us.auth0.com/api/v2/users', {
-            headers: {
-                Authorization: `Bearer ${token}`,
+        let organization = yield OrgModel_1.OrgModel.create({
+            "name": name,
+            "display_name": display_name,
+            "branding": {
+                "logo_url": branding_logo_url
+            },
+            "metadata": {
+                createdByEmail: createdByEmail,
+                status: "provisoning"
+            },
+            "colors": {
+                "page_background": page_background_color,
+                "primary": primary_color
             },
         });
-        res.status(200).json(response.data);
-    }
-    catch (error) {
-        console.error(' Error fetching users from Auth0:', ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) || error.message);
-        res.status(((_b = error.response) === null || _b === void 0 ? void 0 : _b.status) || 500).json({
-            message: 'Failed to fetch users from Auth0',
-            details: ((_c = error.response) === null || _c === void 0 ? void 0 : _c.data) || error.message,
+        let client = yield (0, client_1.getClient)();
+        let createdOrg = yield client.workflow.start(workflows_1.createOrgWorkflow, {
+            args: [organization, organization._id],
+            workflowId: organization.name + Date.now(),
+            taskQueue: 'organizationManagement'
         });
+        res.status(200).send("workflow started");
+    }
+    catch (err) {
+        console.error("Error message:", err === null || err === void 0 ? void 0 : err.message);
+        console.error("Stack trace:", err === null || err === void 0 ? void 0 : err.stack);
+        console.error("Full error object:", err);
+        console.log(err);
+        throw new Error("error while creating the organization ");
+    }
+}));
+router.patch("/update/:id", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    if (!id) {
+        return res.status(400).send("Invalid userId");
+    }
+    const { name, display_name } = req.body;
+    try {
+        let update = {};
+        if (name)
+            update.name = name;
+        if (display_name)
+            update.display_name = display_name;
+        const updated = yield OrgModel_1.OrgModel.findByIdAndUpdate(new mongoose_1.default.Types.ObjectId(id), update, { new: true });
+        yield OrgModel_1.OrgModel.findByIdAndUpdate(new mongoose_1.default.Types.ObjectId(id), {
+            "metadata.status": 'updating'
+        });
+        if (!updated) {
+            return res.status(404).send("Organization not found");
+        }
+        const client = yield (0, client_1.getClient)();
+        console.log(updated.authid, update, updated.metadata.createdByEmail, updated._id);
+        yield client.workflow.start(workflows_1.updateWorkflow, {
+            args: [updated.authid, update, updated.metadata.createdByEmail, updated._id],
+            workflowId: updated.name + '-' + Date.now(),
+            taskQueue: 'organizationManagement',
+        });
+        res.status(200).send(updated);
+    }
+    catch (err) {
+        res.status(500).send(err === null || err === void 0 ? void 0 : err.message);
+    }
+}));
+router.patch('/delete/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    if (!id) {
+        res.status(400).send('error while deleting the user');
+        return;
+    }
+    try {
+        const org = yield OrgModel_1.OrgModel.findByIdAndUpdate(new mongoose_1.default.Types.ObjectId(id), {
+            "metadata.status": "deleting"
+        });
+        const client = yield (0, client_1.getClient)();
+        yield client.workflow.start(workflows_1.deleteWorkflow, {
+            args: [org.authid, org.metadata.createdByEmail, org._id],
+            workflowId: "deleting workflow" + Date.now(),
+            taskQueue: 'organizationManagement'
+        });
+        res.status(200).send("delete workflow started");
+    }
+    catch (err) {
+        throw new Error(err === null || err === void 0 ? void 0 : err.message);
     }
 }));
 exports.default = router;

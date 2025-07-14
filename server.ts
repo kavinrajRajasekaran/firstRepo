@@ -1,17 +1,17 @@
-import express,{Request,Response} from 'express';
+import express, { Request, Response } from 'express';
 import router from './router'
 
-const app=express();
-import { connectToMongo } from './db';
+const app = express();
+import { connectToMongo } from './utils/db';
 app.use(express.json());
 connectToMongo()
 
-app.get('/health',async(req:Request,res:Response)=>{
-    res.send(200).json({"status":"ok"})
+app.get('/health', async (req: Request, res: Response) => {
+  res.send(200).json({ "status": "ok" })
 })
 
 
-app.use('/api',router)
+app.use('/api', router)
 
 
 app.listen(3000, () => {

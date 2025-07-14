@@ -6,11 +6,14 @@
     "@temporalio/worker": "^1.12.1",
     "@types/express": "^5.0.3",
     "@types/mongoose": "^5.11.96",
+    "@types/nodemailer": "^6.4.17",
+    "auth0": "^4.27.0",
     "axios": "^1.10.0",
     "dotenv": "^17.1.0",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.2",
+    "nodemailer": "^7.0.5",
     "nodemon": "^3.1.10",
     "uuid": "^11.1.0"
   },
@@ -22,8 +25,9 @@
     "typescript": "^5.8.3"
   },
   "scripts": {
-    "dev": "ts-node --require dotenv/config dist/server",
+    
     "start": "tsx --require dotenv/config server.ts",
-    "worker": "tsx --require dotenv/config worker.ts"
+    "worker": "tsx --require dotenv/config temporal/worker.ts"
   }
+ 
 }
